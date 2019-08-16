@@ -1,11 +1,13 @@
-import {Component, DoCheck, Inject, OnInit, Input, Output,
-    ViewChild, Renderer2, ElementRef, EventEmitter} from '@angular/core';
-import { Observable } from 'rxjs';
+/**
+ * Demo of using the ReactiveFormsAssistant
+ */
+import {Component, DoCheck, OnInit,
+    ViewChild, Renderer2, ElementRef} from '@angular/core';
+
 import { MatDrawer } from '@angular/material';
 
 import { FormGroup, FormArray, FormBuilder } from '@angular/forms';
 import { ReactiveFormAssistant } from './reactiveformsassistant';
-import { LocalStorageDataService } from './localstoragedataservice';
 
 export class Meeting {
     title = 'Meeting';
@@ -19,7 +21,7 @@ export class Meeting {
 export class AgendaItem {
     public title: string = null;
     public description: string = null;
-    public agendaItemType: string = null;    
+    public agendaItemType: string = null;
 
     public static fromTitle(title: string): AgendaItem {
         const agendaItem = new AgendaItem();
@@ -29,10 +31,8 @@ export class AgendaItem {
 }
 
 @Component({
-    moduleId: window['_moduleidroot']+'/reactiveforms/',
     templateUrl: 'reactiveformsdemo.component.html',
-    selector: 'reactiveforms-demo-component',
-    providers: [ReactiveFormAssistant,LocalStorageDataService]
+    providers: [ReactiveFormAssistant]
 })
 export class ReactiveFormsDemoComponent implements DoCheck, OnInit {
     sidenavmode: string;
@@ -58,7 +58,6 @@ export class ReactiveFormsDemoComponent implements DoCheck, OnInit {
     constructor(
         private renderer: Renderer2,
         private formBuilder: FormBuilder,
-        private dataservice: LocalStorageDataService,
         private reactiveFormAssistant: ReactiveFormAssistant
     ) {
         this.formGroup = formBuilder.group(
@@ -69,13 +68,32 @@ export class ReactiveFormsDemoComponent implements DoCheck, OnInit {
                 }
             )
         );
-        this.dataservice.init('_reactiveformsdemo');
+
+        // Connect Reactive Forms Assistance to formgroup
         this.reactiveFormAssistant.formGroup = this.formGroup;
-        this.reactiveFormAssistant.controlsubscribe();
-        
-        this.dataservice.reactiveFormAssistant.next(reactiveFormAssistant);
-        this.dataservice.reactiveFormAssistant.complete();        
-        
+        this.reactiveFormAssistant.controlsubscribe(); // subscribe to the controls
+
+        // Create a websocket connection (to http://localhost:4200 if testing locally)
+        const ws = new WebSocket(`ws${location.origin.substr(4)}/websocketrelay`);
+
+        const myMessages = {}; // Track messages sent by me
+
+        // Subscribe to changes made by the user in the form and send to the websocket server
+        this.reactiveFormAssistant.formUpdatesSubject.subscribe(formUpdateEvent => {
+            const message = JSON.stringify(formUpdateEvent);
+            myMessages[message] = true;
+            ws.send(message);
+        });
+
+        // Subscribe to messages from the websocket server and patch form with updates
+        ws.onmessage = messageEvent => {
+            if (myMessages[messageEvent.data]) {
+                // Don't patch form with our own messages
+                delete myMessages[messageEvent.data];
+            } else {
+                this.reactiveFormAssistant.patchFormUpdateEvent(JSON.parse(messageEvent.data));
+            }
+        };
     }
 
     ngOnInit() {
@@ -140,8 +158,8 @@ export class ReactiveFormsDemoComponent implements DoCheck, OnInit {
     moveAgendaItemUp(index: number) {
         const formArray = (this.formGroup.controls['agendaItems'] as FormArray);
         const current = formArray.at(index);
-        const replaceWith = formArray.at(index-1);
-        formArray.setControl(index-1,current);
+        const replaceWith = formArray.at(index - 1);
+        formArray.setControl(index - 1, current);
         formArray.setControl(index,replaceWith);
         this.reactiveFormAssistant.sendFullArray(formArray);
     }
@@ -149,9 +167,9 @@ export class ReactiveFormsDemoComponent implements DoCheck, OnInit {
     moveAgendaItemDown(index: number) {
         const formArray = (this.formGroup.controls['agendaItems'] as FormArray);
         const current = formArray.at(index);
-        const replaceWith = formArray.at(index+1);
-        formArray.setControl(index+1,current);
-        formArray.setControl(index,replaceWith);
+        const replaceWith = formArray.at(index + 1);
+        formArray.setControl(index + 1, current);
+        formArray.setControl(index, replaceWith);
         this.reactiveFormAssistant.sendFullArray(formArray);
     }
 }
