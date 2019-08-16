@@ -1,0 +1,34 @@
+@startuml component
+
+package "Reactive form" {
+    component reactiveform [
+        Text field
+        Dropdown select
+        Table (FormArray)
+        - row 1
+        - row 2
+        - row 3
+        FormGroups etc..
+    ]
+}
+
+package "Reactive Form Assistant" {
+    node "subscribe" as controlsubscribe
+    node "patch" as controlpatch
+}
+
+reactiveform --> controlsubscribe
+controlpatch --> reactiveform
+
+package "Relay" as relay {
+    top to bottom direction
+    node "Custom web socket client application code" as wsclient    
+    node "Websocket server" as wsserver
+    wsclient --> wsserver
+    wsserver --> wsclient
+}
+
+controlsubscribe --> wsclient : "Outgoing form \nupdate event"
+wsclient --> controlpatch : "Incoming form \nupdate event"
+
+@enduml
